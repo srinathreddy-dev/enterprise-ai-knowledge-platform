@@ -23,16 +23,24 @@ def create_test_pdf(file_path: Path) -> None:
     document.close()
 
 
-def test_ingestion_pipeline_cleans_extracted_text(tmp_path: Path):
-    """The pipeline should return cleaned text with document metadata."""
+def test_ingestion_pipeline_cleans_and_chunks_document(tmp_path: Path):
+    """The pipeline should clean text and produce searchable chunks."""
     pdf_path = tmp_path / "employee_handbook.pdf"
     create_test_pdf(pdf_path)
 
     pipeline = DocumentIngestionPipeline()
-    document = pipeline.process(pdf_path)
+    result = pipeline.process(pdf_path)
 
-    assert document.file_name == "employee_handbook.pdf"
-    assert len(document.pages) == 1
-    assert document.pages[0].page_number == 1
-    assert "Employee Benefits" in document.pages[0].text
-    assert "Employees are eligible for health insurance." in document.pages[0].text
+    assert result.document.file_name == "employee_handbook.pdf"
+    assert len(result.document.pages) == 1
+    assert result.document.pages[0].page_number == 1
+
+    assert "Employee Benefits" in result.document.pages[0].text
+    assert "Employees are eligible for health insurance." in (
+        result.document.pages[0].text
+    )
+
+    assert len(result.chunks) == 1
+    assert result.chunks[0].page_number == 1
+    assert result.chunks[0].chunk_index == 0
+    assert "Employee Benefits" in result.chunks[0].text
