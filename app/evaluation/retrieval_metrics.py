@@ -1,0 +1,75 @@
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class EvaluationQuery:
+    """A retrieval query and the chunks considered relevant."""
+
+    query: str
+    relevant_chunk_indexes: set[int]
+
+
+def recall_at_k(
+    retrieved_chunk_indexes: list[int],
+    relevant_chunk_indexes: set[int],
+    k: int,
+) -> float:
+    """Calculate whether relevant chunks appear in the top-k results."""
+    if k <= 0:
+        raise ValueError("k must be greater than zero")
+
+    if not relevant_chunk_indexes:
+        return 0.0
+
+    retrieved = set(retrieved_chunk_indexes[:k])
+
+    relevant_retrieved = retrieved.intersection(
+        relevant_chunk_indexes
+    )
+
+    return len(relevant_retrieved) / len(relevant_chunk_indexes)
+
+
+def reciprocal_rank(
+    retrieved_chunk_indexes: list[int],
+    relevant_chunk_indexes: set[int],
+) -> float:
+    """Calculate reciprocal rank of the first relevant result."""
+    if not relevant_chunk_indexes:
+        return 0.0
+
+    for rank, chunk_index in enumerate(
+        retrieved_chunk_indexes,
+        start=1,
+    ):
+        if chunk_index in relevant_chunk_indexes:
+            return 1.0 / rank
+
+    return 0.0
+
+
+def mean_reciprocal_rank(
+    queries: list[EvaluationQuery],
+    retrieved_results: list[list[int]],
+) -> float:
+    """Calculate mean reciprocal rank across evaluation queries."""
+    if not queries:
+        return 0.0
+
+    if len(queries) != len(retrieved_results):
+        raise ValueError(
+            "queries and retrieved_results must have the same length"
+        )
+
+    reciprocal_ranks = [
+        reciprocal_rank(
+            retrieved_chunk_indexes,
+            evaluation_query.relevant_chunk_indexes,
+        )
+        for evaluation_query, retrieved_chunk_indexes in zip(
+            queries,
+            retrieved_results,
+        )
+    ]
+
+    return sum(reciprocal_ranks) / len(reciprocal_ranks)
