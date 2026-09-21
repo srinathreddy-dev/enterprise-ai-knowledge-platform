@@ -9,6 +9,11 @@ class TextChunk:
     page_number: int
     chunk_index: int
 
+    @property
+    def chunk_id(self) -> str:
+        """Return a stable identifier for this chunk."""
+        return f"page-{self.page_number}-chunk-{self.chunk_index}"
+
 
 class TextChunker:
     """Split page text into smaller overlapping chunks."""
@@ -58,3 +63,5 @@ class TextChunker:
             chunk_index += 1
 
         return chunks
+
+

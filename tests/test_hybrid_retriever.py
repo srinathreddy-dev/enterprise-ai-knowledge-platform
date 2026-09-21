@@ -100,3 +100,29 @@ def test_hybrid_retriever_requires_positive_total_weight():
             bm25_weight=0.0,
             semantic_weight=0.0,
         )
+
+def test_hybrid_retriever_handles_duplicate_chunk_indexes_across_pages():
+    """Chunks on different pages must remain distinct during retrieval."""
+    chunks = [
+        TextChunk(
+            text="Health insurance enrollment is available during open enrollment.",
+            page_number=1,
+            chunk_index=0,
+        ),
+        TextChunk(
+            text="Retirement savings plans are available to eligible employees.",
+            page_number=2,
+            chunk_index=0,
+        ),
+    ]
+
+    retriever = HybridRetriever(chunks)
+
+    results = retriever.search(
+        "retirement savings benefits",
+        top_k=2,
+    )
+
+    assert len(results) == 2
+    assert results[0].chunk.page_number == 2
+    assert results[0].chunk.chunk_id == "page-2-chunk-0"

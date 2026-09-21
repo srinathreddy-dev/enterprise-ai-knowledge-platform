@@ -62,20 +62,20 @@ class HybridRetriever:
         )
 
         bm25_scores = {
-            result.chunk.chunk_index: result.score
+            result.chunk.chunk_id: result.score
             for result in bm25_results
         }
 
         semantic_scores = {
-            result.chunk.chunk_index: result.score
+            result.chunk.chunk_id: result.score
             for result in semantic_results
         }
 
         combined_results: list[HybridRetrievalResult] = []
 
         for chunk in self.chunks:
-            bm25_score = bm25_scores.get(chunk.chunk_index, 0.0)
-            semantic_score = semantic_scores.get(chunk.chunk_index, 0.0)
+            bm25_score = bm25_scores.get(chunk.chunk_id, 0.0)
+            semantic_score = semantic_scores.get(chunk.chunk_id, 0.0)
 
             combined_score = (
                 bm25_weight * self._normalize_bm25_score(
