@@ -1,6 +1,6 @@
 from pathlib import Path
 
-import fitz
+import pymupdf
 
 
 output_path = Path("data/sample/employee_handbook.pdf")
@@ -40,11 +40,11 @@ instructions, employees should consult Human Resources or the official
 plan documents.""",
 ]
 
-with fitz.open() as document:
+with pymupdf.open() as document:
     for page_text in pages:
         page = document.new_page()
         page.insert_textbox(
-            fitz.Rect(50, 50, 545, 750),
+            pymupdf.Rect(50, 50, 545, 750)
             page_text,
             fontsize=12,
             lineheight=1.5,

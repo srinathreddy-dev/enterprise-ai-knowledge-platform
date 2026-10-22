@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-import fitz
+import pymupdf
 
 
 @dataclass(frozen=True)
@@ -37,7 +37,7 @@ class PDFLoader:
 
         pages: list[PageContent] = []
 
-        with fitz.open(path) as document:
+        with pymupdf.open(path) as document:
             for page_number, page in enumerate(document, start=1):
                 text = page.get_text("text").strip()
 
