@@ -1,3 +1,6 @@
+from pathlib import Path
+
+from app.generation.rag_factory import build_rag_service
 
 from unittest.mock import Mock
 
@@ -102,3 +105,46 @@ def test_ask_endpoint_handles_missing_evidence():
     finally:
         set_rag_service(None)
 
+def test_ask_endpoint_with_real_sample_pdf():
+    pdf_path = Path("data/sample/employee_handbook.pdf")
+
+    class FakeAnswerService:
+        def generate_answer(self, question, evidence):
+            page = evidence[0].result.chunk.page_number
+            return (
+                f"Test answer based on page {page}. "
+                f"[Page {page}]"
+            )
+
+    service = build_rag_service(
+        pdf_path=pdf_path,
+        answer_service=FakeAnswerService(),
+    )
+    set_rag_service(service)
+
+    try:
+        response = client.post(
+            "/ask",
+            json={
+                "question": (
+                    "How many vacation days do employees receive?"
+                )
+            },
+        )
+
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["question"] == (
+            "How many vacation days do employees receive?"
+        )
+        assert data["evidence"]
+        assert data["evidence"][0]["page_number"] == 1
+        assert "15 days of paid vacation" in (
+            data["evidence"][0]["text"]
+        )
+        assert data["answer"] == (
+            "Test answer based on page 1. [Page 1]"
+        )
+    finally:
+        set_rag_service(None)
