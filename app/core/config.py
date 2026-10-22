@@ -14,6 +14,11 @@ class Settings:
         "ENVIRONMENT",
         "development",
     )
+    openai_api_key: str | None = os.getenv("OPENAI_API_KEY")
+    openai_model: str = os.getenv(
+        "OPENAI_MODEL",
+        "gpt-4.1-mini",
+    )
 
 
 settings = Settings()
