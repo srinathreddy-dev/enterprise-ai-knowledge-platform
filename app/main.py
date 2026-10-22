@@ -74,6 +74,17 @@ def health_check() -> dict[str, str]:
     """Return the current health status of the API."""
     return {"status": "healthy"}
 
+@app.get("/ready")
+def readiness_check() -> dict[str, str]:
+    service = getattr(app.state, "rag_service", None)
+
+    if service is None:
+        raise HTTPException(
+            status_code=503,
+            detail="The knowledge service is not configured.",
+        )
+
+    return {"status": "ready"}
 
 @app.post("/ask", response_model=AskResponse)
 def ask_question(request: AskRequest) -> AskResponse:

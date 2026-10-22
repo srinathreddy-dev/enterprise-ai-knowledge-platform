@@ -148,3 +148,25 @@ def test_ask_endpoint_with_real_sample_pdf():
         )
     finally:
         set_rag_service(None)
+def test_ready_endpoint_returns_200_when_service_is_configured():
+    mock_service = Mock()
+    set_rag_service(mock_service)
+
+    try:
+        response = client.get("/ready")
+
+        assert response.status_code == 200
+        assert response.json() == {"status": "ready"}
+    finally:
+        set_rag_service(None)
+
+
+def test_ready_endpoint_returns_503_when_service_is_not_configured():
+    set_rag_service(None)
+
+    response = client.get("/ready")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == (
+        "The knowledge service is not configured."
+    )
