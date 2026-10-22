@@ -26,6 +26,13 @@ async def lifespan(app: FastAPI):
         yield
         return
 
+    if not settings.openai_api_key:
+        app.state.rag_startup_error = (
+            "OpenAI API key is not configured."
+        )
+        yield
+        return
+
     try:
         app.state.rag_service = build_rag_service(SAMPLE_PDF)
     except (ValueError, FileNotFoundError) as exc:
