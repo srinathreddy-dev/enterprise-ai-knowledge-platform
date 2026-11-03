@@ -8,13 +8,17 @@ def test_evaluation_dataset_contains_expected_queries():
 def test_evaluation_queries_have_relevant_chunks():
     for evaluation_query in EVALUATION_QUERIES:
         assert evaluation_query.query
-        assert evaluation_query.relevant_chunk_indexes
+        assert evaluation_query.relevant_chunk_ids
 
 
-def test_evaluation_queries_use_expected_chunk_indexes():
-    indexes = [
-        next(iter(query.relevant_chunk_indexes))
+def test_evaluation_queries_use_expected_chunk_ids():
+    chunk_ids = [
+        next(iter(query.relevant_chunk_ids))
         for query in EVALUATION_QUERIES
     ]
 
-    assert indexes == [0, 1, 2]
+    assert chunk_ids == [
+        "page-2-chunk-0",
+        "page-1-chunk-0",
+        "page-3-chunk-0",
+    ]

@@ -6,43 +6,37 @@ class EvaluationQuery:
     """A retrieval query and the chunks considered relevant."""
 
     query: str
-    relevant_chunk_indexes: set[int]
+    relevant_chunk_ids: set[str]
 
 
 def recall_at_k(
-    retrieved_chunk_indexes: list[int],
-    relevant_chunk_indexes: set[int],
+    retrieved_chunk_ids: list[str],
+    relevant_chunk_ids: set[str],
     k: int,
 ) -> float:
-    """Calculate whether relevant chunks appear in the top-k results."""
+    """Calculate recall among the top-k retrieved chunks."""
     if k <= 0:
         raise ValueError("k must be greater than zero")
 
-    if not relevant_chunk_indexes:
+    if not relevant_chunk_ids:
         return 0.0
 
-    retrieved = set(retrieved_chunk_indexes[:k])
+    retrieved = set(retrieved_chunk_ids[:k])
+    relevant_retrieved = retrieved.intersection(relevant_chunk_ids)
 
-    relevant_retrieved = retrieved.intersection(
-        relevant_chunk_indexes
-    )
-
-    return len(relevant_retrieved) / len(relevant_chunk_indexes)
+    return len(relevant_retrieved) / len(relevant_chunk_ids)
 
 
 def reciprocal_rank(
-    retrieved_chunk_indexes: list[int],
-    relevant_chunk_indexes: set[int],
+    retrieved_chunk_ids: list[str],
+    relevant_chunk_ids: set[str],
 ) -> float:
     """Calculate reciprocal rank of the first relevant result."""
-    if not relevant_chunk_indexes:
+    if not relevant_chunk_ids:
         return 0.0
 
-    for rank, chunk_index in enumerate(
-        retrieved_chunk_indexes,
-        start=1,
-    ):
-        if chunk_index in relevant_chunk_indexes:
+    for rank, chunk_id in enumerate(retrieved_chunk_ids, start=1):
+        if chunk_id in relevant_chunk_ids:
             return 1.0 / rank
 
     return 0.0
@@ -50,7 +44,7 @@ def reciprocal_rank(
 
 def mean_reciprocal_rank(
     queries: list[EvaluationQuery],
-    retrieved_results: list[list[int]],
+    retrieved_results: list[list[str]],
 ) -> float:
     """Calculate mean reciprocal rank across evaluation queries."""
     if not queries:
@@ -63,10 +57,10 @@ def mean_reciprocal_rank(
 
     reciprocal_ranks = [
         reciprocal_rank(
-            retrieved_chunk_indexes,
-            evaluation_query.relevant_chunk_indexes,
+            retrieved_chunk_ids,
+            evaluation_query.relevant_chunk_ids,
         )
-        for evaluation_query, retrieved_chunk_indexes in zip(
+        for evaluation_query, retrieved_chunk_ids in zip(
             queries,
             retrieved_results,
         )

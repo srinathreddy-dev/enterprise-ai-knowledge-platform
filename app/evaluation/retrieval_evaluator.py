@@ -50,7 +50,7 @@ class RetrievalEvaluator:
         """Evaluate BM25 retrieval."""
         retrieved_results = [
             [
-                result.chunk.chunk_index
+                result.chunk.chunk_id
                 for result in self.bm25_retriever.search(
                     evaluation_query.query,
                     top_k=k,
@@ -59,16 +59,13 @@ class RetrievalEvaluator:
             for evaluation_query in self.evaluation_queries
         ]
 
-        return self._calculate_metrics(
-            retrieved_results,
-            k,
-        )
+        return self._calculate_metrics(retrieved_results, k)
 
     def evaluate_semantic(self, k: int = 5) -> RetrievalEvaluation:
         """Evaluate semantic retrieval."""
         retrieved_results = [
             [
-                result.chunk.chunk_index
+                result.chunk.chunk_id
                 for result in self.semantic_searcher.search(
                     evaluation_query.query,
                     top_k=k,
@@ -77,16 +74,13 @@ class RetrievalEvaluator:
             for evaluation_query in self.evaluation_queries
         ]
 
-        return self._calculate_metrics(
-            retrieved_results,
-            k,
-        )
+        return self._calculate_metrics(retrieved_results, k)
 
     def evaluate_hybrid(self, k: int = 5) -> RetrievalEvaluation:
         """Evaluate hybrid retrieval."""
         retrieved_results = [
             [
-                result.chunk.chunk_index
+                result.chunk.chunk_id
                 for result in self.hybrid_retriever.search(
                     evaluation_query.query,
                     top_k=k,
@@ -95,23 +89,26 @@ class RetrievalEvaluator:
             for evaluation_query in self.evaluation_queries
         ]
 
-        return self._calculate_metrics(
-            retrieved_results,
-            k,
-        )
+        return self._calculate_metrics(retrieved_results, k)
 
     def _calculate_metrics(
         self,
-        retrieved_results: list[list[int]],
+        retrieved_results: list[list[str]],
         k: int,
     ) -> RetrievalEvaluation:
+        if not self.evaluation_queries:
+            return RetrievalEvaluation(
+                recall_at_k=0.0,
+                mean_reciprocal_rank=0.0,
+            )
+
         recall_scores = [
             recall_at_k(
-                retrieved_chunk_indexes,
-                evaluation_query.relevant_chunk_indexes,
+                retrieved_chunk_ids,
+                evaluation_query.relevant_chunk_ids,
                 k,
             )
-            for evaluation_query, retrieved_chunk_indexes in zip(
+            for evaluation_query, retrieved_chunk_ids in zip(
                 self.evaluation_queries,
                 retrieved_results,
             )

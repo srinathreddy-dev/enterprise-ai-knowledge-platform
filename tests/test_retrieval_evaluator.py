@@ -1,5 +1,6 @@
 from app.evaluation.retrieval_evaluator import RetrievalEvaluator
 from app.ingestion.chunker import TextChunk
+from app.evaluation.retrieval_metrics import EvaluationQuery
 
 
 def create_chunks() -> list[TextChunk]:
@@ -7,18 +8,18 @@ def create_chunks() -> list[TextChunk]:
     return [
         TextChunk(
             text="Employees can enroll in health insurance during open enrollment.",
-            page_number=1,
+            page_number=2,
             chunk_index=0,
         ),
         TextChunk(
             text="Employees receive fifteen paid vacation days each year.",
-            page_number=2,
-            chunk_index=1,
+            page_number=1,
+            chunk_index=0,
         ),
         TextChunk(
             text="The company provides retirement savings plans to eligible employees.",
             page_number=3,
-            chunk_index=2,
+            chunk_index=0,
         ),
     ]
 
@@ -51,12 +52,10 @@ def test_evaluator_calculates_hybrid_metrics():
 
 
 def test_evaluator_accepts_custom_evaluation_queries():
-    from app.evaluation.retrieval_metrics import EvaluationQuery
-
     queries = [
         EvaluationQuery(
             query="health insurance",
-            relevant_chunk_indexes={0},
+            relevant_chunk_ids={"page-2-chunk-0"},
         )
     ]
 
