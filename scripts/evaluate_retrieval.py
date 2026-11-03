@@ -14,16 +14,15 @@ def main() -> None:
         raise FileNotFoundError(f"Sample PDF not found: {SAMPLE_PDF}")
 
     print("\nEnterprise AI Knowledge Platform")
-    print("=" * 55)
-    print("Loading and processing employee handbook...")
+    print("=" * 75)
 
-    ingestion_pipeline = DocumentIngestionPipeline()
-    ingested_document = ingestion_pipeline.process(SAMPLE_PDF)
+    pipeline = DocumentIngestionPipeline()
+    ingested_document = pipeline.process(SAMPLE_PDF)
 
     print(f"Document: {ingested_document.document.file_name}")
     print(f"Total chunks: {len(ingested_document.chunks)}")
+    print("Initializing retrieval evaluation...")
 
-    print("\nInitializing retrieval evaluation...")
     evaluator = RetrievalEvaluator(ingested_document.chunks)
 
     strategies = [
@@ -33,24 +32,29 @@ def main() -> None:
     ]
 
     print("\nRetrieval Evaluation Results")
-    print("=" * 55)
-    print(f"{'Strategy':<22} {'Recall@3':>12} {'MRR':>12}")
-    print("-" * 55)
+    print("=" * 75)
+    print(
+        f"{'Strategy':<22}"
+        f"{'Recall@1':>12}"
+        f"{'Recall@3':>12}"
+        f"{'MRR':>12}"
+    )
+    print("-" * 75)
 
     for strategy_name, evaluate in strategies:
-        metrics = evaluate(k=3)
+        recall_at_1 = evaluate(k=1)
+        recall_at_3 = evaluate(k=3)
 
         print(
-            f"{strategy_name:<22} "
-            f"{metrics.recall_at_k:>12.3f} "
-            f"{metrics.mean_reciprocal_rank:>12.3f}"
+            f"{strategy_name:<22}"
+            f"{recall_at_1.recall_at_k:>12.3f}"
+            f"{recall_at_3.recall_at_k:>12.3f}"
+            f"{recall_at_3.mean_reciprocal_rank:>12.3f}"
         )
 
-    print("=" * 55)
-    print("\nEvaluation completed successfully.")
-    print(
-        f"Queries evaluated: {len(evaluator.evaluation_queries)}"
-    )
+    print("=" * 75)
+    print(f"Queries evaluated: {len(evaluator.evaluation_queries)}")
+    print("Evaluation completed successfully.")
 
 
 if __name__ == "__main__":
