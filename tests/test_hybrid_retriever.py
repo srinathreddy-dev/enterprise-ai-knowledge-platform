@@ -1,3 +1,4 @@
+
 import pytest
 
 from app.ingestion.chunker import TextChunk
@@ -11,16 +12,19 @@ def create_chunks() -> list[TextChunk]:
             text="Employees can enroll in health insurance during open enrollment.",
             page_number=1,
             chunk_index=0,
+            document_id="employee_handbook",
         ),
         TextChunk(
             text="Employees receive fifteen paid vacation days each year.",
             page_number=2,
             chunk_index=1,
+            document_id="employee_handbook",
         ),
         TextChunk(
             text="The company provides retirement savings plans to eligible employees.",
             page_number=3,
             chunk_index=2,
+            document_id="employee_handbook",
         ),
     ]
 
@@ -101,6 +105,7 @@ def test_hybrid_retriever_requires_positive_total_weight():
             semantic_weight=0.0,
         )
 
+
 def test_hybrid_retriever_handles_duplicate_chunk_indexes_across_pages():
     """Chunks on different pages must remain distinct during retrieval."""
     chunks = [
@@ -108,11 +113,13 @@ def test_hybrid_retriever_handles_duplicate_chunk_indexes_across_pages():
             text="Health insurance enrollment is available during open enrollment.",
             page_number=1,
             chunk_index=0,
+            document_id="employee_handbook",
         ),
         TextChunk(
             text="Retirement savings plans are available to eligible employees.",
             page_number=2,
             chunk_index=0,
+            document_id="employee_handbook",
         ),
     ]
 
@@ -125,4 +132,7 @@ def test_hybrid_retriever_handles_duplicate_chunk_indexes_across_pages():
 
     assert len(results) == 2
     assert results[0].chunk.page_number == 2
-    assert results[0].chunk.chunk_id == "page-2-chunk-0"
+    assert results[0].chunk.chunk_id == (
+        "employee_handbook-page-2-chunk-0"
+    )
+

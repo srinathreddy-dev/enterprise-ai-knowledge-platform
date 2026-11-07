@@ -1,3 +1,4 @@
+
 from dataclasses import dataclass
 
 
@@ -8,11 +9,16 @@ class TextChunk:
     text: str
     page_number: int
     chunk_index: int
+    document_id: str = "document"
 
     @property
     def chunk_id(self) -> str:
-        """Return a stable identifier for this chunk."""
-        return f"page-{self.page_number}-chunk-{self.chunk_index}"
+        """Return a stable identifier for this document chunk."""
+        return (
+            f"{self.document_id}-"
+            f"page-{self.page_number}-"
+            f"chunk-{self.chunk_index}"
+        )
 
 
 class TextChunker:
@@ -31,8 +37,13 @@ class TextChunker:
         self.chunk_size = chunk_size
         self.overlap = overlap
 
-    def chunk(self, text: str, page_number: int) -> list[TextChunk]:
-        """Split text into chunks while preserving page metadata."""
+    def chunk(
+        self,
+        text: str,
+        page_number: int,
+        document_id: str = "document",
+    ) -> list[TextChunk]:
+        """Split page text while preserving document and page metadata."""
         text = text.strip()
 
         if not text:
@@ -44,7 +55,6 @@ class TextChunker:
 
         while start < len(text):
             end = min(start + self.chunk_size, len(text))
-
             chunk_text = text[start:end].strip()
 
             if chunk_text:
@@ -53,6 +63,7 @@ class TextChunker:
                         text=chunk_text,
                         page_number=page_number,
                         chunk_index=chunk_index,
+                        document_id=document_id,
                     )
                 )
 
@@ -63,5 +74,4 @@ class TextChunker:
             chunk_index += 1
 
         return chunks
-
 

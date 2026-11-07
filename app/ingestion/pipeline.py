@@ -1,3 +1,4 @@
+
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -29,7 +30,11 @@ class DocumentIngestionPipeline:
 
     def process(self, file_path: str | Path) -> IngestedDocument:
         """Load, clean, and chunk a PDF document."""
-        document = self.pdf_loader.load(file_path)
+        path = Path(file_path)
+
+        document = self.pdf_loader.load(path)
+
+        document_id = path.stem
 
         cleaned_pages = [
             page.__class__(
@@ -51,6 +56,7 @@ class DocumentIngestionPipeline:
                 self.text_chunker.chunk(
                     page.text,
                     page.page_number,
+                    document_id=document_id,
                 )
             )
 
@@ -58,3 +64,4 @@ class DocumentIngestionPipeline:
             document=cleaned_document,
             chunks=chunks,
         )
+
