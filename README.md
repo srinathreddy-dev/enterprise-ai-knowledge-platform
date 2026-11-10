@@ -226,6 +226,14 @@ The platform includes a monitoring stack using Prometheus, Grafana, and cAdvisor
 
 Email alert delivery requires a correctly configured Grafana contact point and SMTP settings.
 
+### Grafana dashboard screenshots
+
+The dashboard provides an overview of API health and performance, alongside Docker container resource usage.
+
+![Grafana dashboard overview](docs/images/grafana-dashboard-overview.png)
+
+![Docker container metrics](docs/images/grafana-container-metrics.png)
+
 ## Configuration
 
 | Variable | Description |
