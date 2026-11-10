@@ -9,44 +9,24 @@ Built with Python, FastAPI, hybrid retrieval, cross-encoder reranking, OpenAI, D
 
 ## Architecture
 
-```text
-                 Enterprise PDF Documents
-                           |
-                           v
-                   PDF Ingestion
-                           |
-                           v
-                 Text Cleaning
-                           |
-                           v
-                  Document Chunking
-                           |
-                           v
-              +------------+------------+
-              |                         |
-              v                         v
-          BM25 Search             Semantic Search
-              |                         |
-              +------------+------------+
-                           |
-                           v
-                 Hybrid Retrieval
-                           |
-                           v
-                 Result Fusion (RRF)
-                           |
-                           v
-                 Cross-Encoder Reranking
-                           |
-                           v
-                  Evidence Selection
-                           |
-                           v
-                 Grounded LLM Generation
-                           |
-                           v
-                Answer with Citations
+The platform uses a hybrid retrieval-augmented generation (RAG) pipeline. PDF documents are ingested, cleaned, and split into chunks. BM25 and semantic retrieval run in parallel; their results are fused with Reciprocal Rank Fusion (RRF), reranked, and passed to grounded answer generation.
 
+```mermaid
+flowchart TD
+    A[Enterprise PDF Documents] --> B[PDF Ingestion]
+    B --> C[Text Cleaning]
+    C --> D[Document Chunking]
+
+    D --> E[BM25 Keyword Retrieval]
+    D --> F[Semantic Retrieval]
+
+    E --> G[Reciprocal Rank Fusion]
+    F --> G
+
+    G --> H[Cross-Encoder Reranking]
+    H --> I[Evidence Selection]
+    I --> J[Grounded LLM Generation]
+    J --> K[Answer with Document and Page Citations]
 ```
 
 ## Key Features
