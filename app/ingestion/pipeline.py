@@ -16,7 +16,7 @@ class IngestedDocument:
 
 
 class DocumentIngestionPipeline:
-    """Coordinate document loading, cleaning, and chunking."""
+    """Coordinate loading, cleaning, and chunking of PDF documents."""
 
     def __init__(
         self,
@@ -29,7 +29,7 @@ class DocumentIngestionPipeline:
         self.text_chunker = text_chunker or TextChunker()
 
     def process(self, file_path: str | Path) -> IngestedDocument:
-        """Load, clean, and chunk a PDF document."""
+        """Load, clean, and chunk a single PDF document."""
         path = Path(file_path)
 
         document = self.pdf_loader.load(path)
@@ -64,4 +64,37 @@ class DocumentIngestionPipeline:
             document=cleaned_document,
             chunks=chunks,
         )
+
+    def process_directory(
+        self,
+        directory_path: str | Path,
+    ) -> list[IngestedDocument]:
+        """Load, clean, and chunk every PDF in a directory."""
+        directory = Path(directory_path)
+
+        if not directory.exists():
+            raise FileNotFoundError(
+                f"Document directory does not exist: {directory}"
+            )
+
+        if not directory.is_dir():
+            raise NotADirectoryError(
+                f"Expected a directory, received: {directory}"
+            )
+
+        pdf_files = sorted(
+            path
+            for path in directory.glob("*.pdf")
+            if path.is_file()
+        )
+
+        if not pdf_files:
+            raise ValueError(
+                f"No PDF documents found in directory: {directory}"
+            )
+
+        return [
+            self.process(pdf_path)
+            for pdf_path in pdf_files
+        ]
 

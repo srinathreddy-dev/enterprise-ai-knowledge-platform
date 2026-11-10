@@ -10,16 +10,49 @@ from app.retrieval.hybrid_retriever import HybridRetriever
 
 
 def build_rag_service(
-    pdf_path: str | Path,
+    pdf_path: str | Path | None = None,
     answer_service: AnswerGenerationService | None = None,
+    *,
+    documents_directory: str | Path | None = None,
 ) -> RAGService:
-    """Build a RAG service from a PDF and an answer-generation service."""
-    ingested = DocumentIngestionPipeline().process(pdf_path)
+    """Build a RAG service from one PDF or a directory of PDFs."""
 
-    if not ingested.chunks:
-        raise ValueError("The PDF did not contain any searchable text.")
+    if pdf_path is not None and documents_directory is not None:
+        raise ValueError(
+            "Provide either pdf_path or documents_directory, not both."
+        )
 
-    hybrid_retriever = HybridRetriever(ingested.chunks)
+    if pdf_path is None and documents_directory is None:
+        raise ValueError(
+            "A PDF path or documents directory must be provided."
+        )
+
+    pipeline = DocumentIngestionPipeline()
+
+    if documents_directory is not None:
+        ingested_documents = pipeline.process_directory(
+            documents_directory
+        )
+    else:
+        source_path = Path(pdf_path)
+
+        if source_path.is_dir():
+            ingested_documents = pipeline.process_directory(source_path)
+        else:
+            ingested_documents = [pipeline.process(source_path)]
+
+    all_chunks = [
+        chunk
+        for ingested_document in ingested_documents
+        for chunk in ingested_document.chunks
+    ]
+
+    if not all_chunks:
+        raise ValueError(
+            "The PDF documents did not contain any searchable text."
+        )
+
+    hybrid_retriever = HybridRetriever(all_chunks)
     reranker = CrossEncoderReranker()
 
     if answer_service is None:
@@ -28,7 +61,7 @@ def build_rag_service(
         )
 
     return RAGService(
-        chunks=ingested.chunks,
+        chunks=all_chunks,
         hybrid_retriever=hybrid_retriever,
         reranker=reranker,
         answer_service=answer_service,

@@ -29,3 +29,19 @@ data/processed/*
 
 # Logs
 *.log
+
+# Build and generated Python files
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Temporary and backup files
+*.bak
+*.tmp
+*.swp
+
+# Jupyter
+.ipynb_checkpoints/

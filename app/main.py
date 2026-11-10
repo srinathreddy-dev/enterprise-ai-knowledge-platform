@@ -1,28 +1,48 @@
 
+import logging
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import Response
+from openai import (
+    APIConnectionError,
+    APIStatusError,
+    APITimeoutError,
+    AuthenticationError,
+    RateLimitError,
+)
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
+from app.core.logging_config import configure_logging
+from app.core.metrics import (
+    HTTP_REQUESTS_TOTAL,
+    HTTP_REQUEST_DURATION_SECONDS,
+)
 from app.generation.rag_factory import build_rag_service
 from app.generation.rag_service import RAGService
 
 
-SAMPLE_PDF = Path("data/sample/employee_handbook.pdf")
+configure_logging()
+logger = logging.getLogger(__name__)
+
+DOCUMENTS_DIRECTORY = Path("data/sample")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize the sample knowledge base when the API starts."""
+    """Initialize the knowledge base when the API starts."""
     app.state.rag_service = None
     app.state.rag_startup_error = None
 
-    if not SAMPLE_PDF.exists():
+    if not DOCUMENTS_DIRECTORY.exists():
         app.state.rag_startup_error = (
-            f"Sample PDF not found: {SAMPLE_PDF}"
+            f"Documents directory not found: {DOCUMENTS_DIRECTORY}"
         )
+        logger.error(app.state.rag_startup_error)
         yield
         return
 
@@ -30,13 +50,18 @@ async def lifespan(app: FastAPI):
         app.state.rag_startup_error = (
             "OpenAI API key is not configured."
         )
+        logger.error(app.state.rag_startup_error)
         yield
         return
 
     try:
-        app.state.rag_service = build_rag_service(SAMPLE_PDF)
-    except (ValueError, FileNotFoundError) as exc:
-        app.state.rag_startup_error = str(exc)
+        app.state.rag_service = build_rag_service(
+            documents_directory=DOCUMENTS_DIRECTORY,
+        )
+        logger.info("RAG service initialized successfully.")
+
+    except (ValueError, FileNotFoundError):
+        logger.exception("Failed to initialize RAG service.")
 
     yield
 
@@ -48,6 +73,72 @@ app = FastAPI(
 )
 
 
+@app.middleware("http")
+async def request_logging_middleware(
+    request: Request,
+    call_next,
+):
+    """Log HTTP requests and record Prometheus metrics."""
+    start_time = time.perf_counter()
+    status_code = 500
+
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+
+        duration_ms = round(
+            (time.perf_counter() - start_time) * 1000,
+            2,
+        )
+
+        logger.info(
+            "HTTP request completed",
+            extra={
+                "http_method": request.method,
+                "http_path": request.url.path,
+                "status_code": status_code,
+                "duration_ms": duration_ms,
+            },
+        )
+
+        return response
+
+    except Exception:
+        duration_ms = round(
+            (time.perf_counter() - start_time) * 1000,
+            2,
+        )
+
+        logger.exception(
+            "HTTP request failed",
+            extra={
+                "http_method": request.method,
+                "http_path": request.url.path,
+                "status_code": status_code,
+                "duration_ms": duration_ms,
+            },
+        )
+
+        raise
+
+    finally:
+        duration_seconds = time.perf_counter() - start_time
+
+        route = request.scope.get("route")
+        endpoint = getattr(route, "path", "unmatched")
+
+        HTTP_REQUESTS_TOTAL.labels(
+            method=request.method,
+            endpoint=endpoint,
+            status_code=str(status_code),
+        ).inc()
+
+        HTTP_REQUEST_DURATION_SECONDS.labels(
+            method=request.method,
+            endpoint=endpoint,
+        ).observe(duration_seconds)
+
+
 class AskRequest(BaseModel):
     """Request body for asking a question."""
 
@@ -57,6 +148,7 @@ class AskRequest(BaseModel):
 class EvidenceResponse(BaseModel):
     """A piece of evidence supporting an answer."""
 
+    document_name: str
     page_number: int
     chunk_id: str
     text: str
@@ -81,8 +173,10 @@ def health_check() -> dict[str, str]:
     """Return the current health status of the API."""
     return {"status": "healthy"}
 
+
 @app.get("/ready")
 def readiness_check() -> dict[str, str]:
+    """Return whether the knowledge service is configured."""
     service = getattr(app.state, "rag_service", None)
 
     if service is None:
@@ -92,6 +186,16 @@ def readiness_check() -> dict[str, str]:
         )
 
     return {"status": "ready"}
+
+
+@app.get("/metrics", include_in_schema=False)
+def metrics() -> Response:
+    """Expose Prometheus application metrics."""
+    return Response(
+        content=generate_latest(),
+        media_type=CONTENT_TYPE_LATEST,
+    )
+
 
 @app.post("/ask", response_model=AskResponse)
 def ask_question(request: AskRequest) -> AskResponse:
@@ -106,14 +210,69 @@ def ask_question(request: AskRequest) -> AskResponse:
 
     try:
         result = service.ask(request.question)
+
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        logger.exception("Invalid request while processing /ask.")
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc),
+        ) from exc
+
+    except RateLimitError as exc:
+        logger.exception("OpenAI rate limit or quota error.")
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "The AI service is temporarily unavailable. "
+                "Please try again later."
+            ),
+        ) from exc
+
+    except APITimeoutError as exc:
+        logger.exception("OpenAI request timed out.")
+        raise HTTPException(
+            status_code=504,
+            detail=(
+                "The AI service request timed out. "
+                "Please try again."
+            ),
+        ) from exc
+
+    except APIConnectionError as exc:
+        logger.exception("Could not connect to OpenAI.")
+        raise HTTPException(
+            status_code=503,
+            detail="The AI service is temporarily unreachable.",
+        ) from exc
+
+    except AuthenticationError as exc:
+        logger.exception("OpenAI authentication failed.")
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "The AI service authentication is not "
+                "configured correctly."
+            ),
+        ) from exc
+
+    except APIStatusError as exc:
+        logger.exception("OpenAI returned an API error.")
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "The AI service returned an error. "
+                "Please try again later."
+            ),
+        ) from exc
 
     return AskResponse(
         question=result.question,
         answer=result.answer,
         evidence=[
             EvidenceResponse(
+                document_name=(
+                    f"{item.result.chunk.document_id}.pdf"
+                ),
                 page_number=item.result.chunk.page_number,
                 chunk_id=item.result.chunk.chunk_id,
                 text=item.result.chunk.text,

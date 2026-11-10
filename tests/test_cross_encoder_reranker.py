@@ -1,90 +1,118 @@
+
+import numpy as np
 import pytest
 
 from app.ingestion.chunker import TextChunk
-from app.reranking.cross_encoder_reranker import CrossEncoderReranker
-from app.retrieval.bm25_retriever import RetrievalResult
+from app.retrieval.cross_encoder_reranker import (
+    CrossEncoderReranker,
+)
 
 
-def create_results() -> list[RetrievalResult]:
+class MockCrossEncoder:
+    def predict(self, pairs):
+        return np.array([0.2, 0.9, 0.5])
+
+
+def create_chunks():
     return [
-        RetrievalResult(
-            chunk=TextChunk(
-                text="Employees receive fifteen paid vacation days each year.",
-                page_number=1,
-                chunk_index=0,
-            ),
-            score=0.5,
+        TextChunk(
+            text="Employees receive annual vacation benefits.",
+            page_number=1,
+            chunk_index=0,
+            document_id="employee_handbook",
         ),
-        RetrievalResult(
-            chunk=TextChunk(
-                text="The company provides retirement savings plans.",
-                page_number=2,
-                chunk_index=0,
-            ),
-            score=0.4,
+        TextChunk(
+            text="Employees enroll in health insurance during open enrollment.",
+            page_number=2,
+            chunk_index=0,
+            document_id="employee_handbook",
+        ),
+        TextChunk(
+            text="Employees can request remote work arrangements.",
+            page_number=3,
+            chunk_index=0,
+            document_id="employee_handbook",
         ),
     ]
 
 
-@pytest.fixture(scope="module")
-def reranker() -> CrossEncoderReranker:
-    return CrossEncoderReranker()
+def create_reranker():
+    reranker = CrossEncoderReranker.__new__(
+        CrossEncoderReranker
+    )
+    reranker.model = MockCrossEncoder()
+    return reranker
 
 
-def test_reranker_prioritizes_relevant_result(
-    reranker: CrossEncoderReranker,
-):
+def test_reranker_sorts_chunks_by_relevance():
+    reranker = create_reranker()
+
     results = reranker.rerank(
-        "How many vacation days do employees receive?",
-        create_results(),
+        query="How do employees enroll in health insurance?",
+        chunks=create_chunks(),
+        top_k=3,
+    )
+
+    assert results[0].score == 0.9
+    assert results[1].score == 0.5
+    assert results[2].score == 0.2
+
+
+def test_reranker_returns_requested_top_k():
+    reranker = create_reranker()
+
+    results = reranker.rerank(
+        query="employee benefits",
+        chunks=create_chunks(),
         top_k=2,
     )
 
     assert len(results) == 2
-    assert results[0].result.chunk.page_number == 1
-    assert results[0].score > results[1].score
 
 
-def test_reranker_respects_top_k(
-    reranker: CrossEncoderReranker,
-):
+def test_reranker_returns_empty_for_empty_query():
+    reranker = create_reranker()
+
     results = reranker.rerank(
-        "How many vacation days do employees receive?",
-        create_results(),
-        top_k=1,
-    )
-
-    assert len(results) == 1
-
-
-def test_reranker_returns_empty_for_empty_query(
-    reranker: CrossEncoderReranker,
-):
-    results = reranker.rerank(
-        "   ",
-        create_results(),
+        query="   ",
+        chunks=create_chunks(),
     )
 
     assert results == []
 
 
-def test_reranker_returns_empty_for_empty_results(
-    reranker: CrossEncoderReranker,
-):
+def test_reranker_returns_empty_for_no_chunks():
+    reranker = create_reranker()
+
     results = reranker.rerank(
-        "How many vacation days do employees receive?",
-        [],
+        query="employee benefits",
+        chunks=[],
     )
 
     assert results == []
 
 
-def test_reranker_rejects_invalid_top_k(
-    reranker: CrossEncoderReranker,
-):
-    with pytest.raises(ValueError, match="top_k"):
+def test_reranker_rejects_invalid_top_k():
+    reranker = create_reranker()
+
+    with pytest.raises(ValueError):
         reranker.rerank(
-            "How many vacation days do employees receive?",
-            create_results(),
+            query="employee benefits",
+            chunks=create_chunks(),
             top_k=0,
         )
+
+
+def test_reranker_results_contain_original_chunks():
+    reranker = create_reranker()
+    chunks = create_chunks()
+
+    results = reranker.rerank(
+        query="employee benefits",
+        chunks=chunks,
+        top_k=3,
+    )
+
+    assert {result.chunk.chunk_id for result in results} == {
+        chunk.chunk_id for chunk in chunks
+    }

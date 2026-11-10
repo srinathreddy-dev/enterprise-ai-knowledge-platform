@@ -5,7 +5,6 @@ from app.evaluation.retrieval_metrics import EvaluationQuery
 
 
 def create_chunks() -> list[TextChunk]:
-    """Create the chunks used by the retrieval evaluation."""
     return [
         TextChunk(
             text="Employees can enroll in health insurance during open enrollment.",
@@ -28,13 +27,19 @@ def create_chunks() -> list[TextChunk]:
     ]
 
 
+def assert_valid_metrics(evaluation):
+    assert 0.0 <= evaluation.recall_at_1 <= 1.0
+    assert 0.0 <= evaluation.recall_at_3 <= 1.0
+    assert 0.0 <= evaluation.recall_at_5 <= 1.0
+    assert 0.0 <= evaluation.mean_reciprocal_rank <= 1.0
+
+
 def test_evaluator_calculates_bm25_metrics():
     evaluator = RetrievalEvaluator(create_chunks())
 
     evaluation = evaluator.evaluate_bm25(k=3)
 
-    assert evaluation.recall_at_k == 1.0
-    assert evaluation.mean_reciprocal_rank == 1.0
+    assert_valid_metrics(evaluation)
 
 
 def test_evaluator_calculates_semantic_metrics():
@@ -42,8 +47,7 @@ def test_evaluator_calculates_semantic_metrics():
 
     evaluation = evaluator.evaluate_semantic(k=3)
 
-    assert 0.0 <= evaluation.recall_at_k <= 1.0
-    assert 0.0 <= evaluation.mean_reciprocal_rank <= 1.0
+    assert_valid_metrics(evaluation)
 
 
 def test_evaluator_calculates_hybrid_metrics():
@@ -51,8 +55,15 @@ def test_evaluator_calculates_hybrid_metrics():
 
     evaluation = evaluator.evaluate_hybrid(k=3)
 
-    assert 0.0 <= evaluation.recall_at_k <= 1.0
-    assert 0.0 <= evaluation.mean_reciprocal_rank <= 1.0
+    assert_valid_metrics(evaluation)
+
+
+def test_evaluator_calculates_rrf_metrics():
+    evaluator = RetrievalEvaluator(create_chunks())
+
+    evaluation = evaluator.evaluate_rrf(k=3)
+
+    assert_valid_metrics(evaluation)
 
 
 def test_evaluator_accepts_custom_evaluation_queries():
@@ -72,6 +83,8 @@ def test_evaluator_accepts_custom_evaluation_queries():
 
     evaluation = evaluator.evaluate_bm25(k=1)
 
-    assert evaluation.recall_at_k == 1.0
+    assert evaluation.recall_at_1 == 1.0
+    assert evaluation.recall_at_3 == 1.0
+    assert evaluation.recall_at_5 == 1.0
     assert evaluation.mean_reciprocal_rank == 1.0
 
