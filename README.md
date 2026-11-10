@@ -1,5 +1,8 @@
 # Enterprise AI Knowledge Platform
 
+[![CI](https://github.com/srinathreddy-dev/enterprise-ai-knowledge-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/srinathreddy-dev/enterprise-ai-knowledge-platform/actions/workflows/ci.yml)
+[![Docker Build](https://github.com/srinathreddy-dev/enterprise-ai-knowledge-platform/actions/workflows/docker-build.yml/badge.svg)](https://github.com/srinathreddy-dev/enterprise-ai-knowledge-platform/actions/workflows/docker-build.yml)
+
 A production-oriented enterprise knowledge platform that transforms internal PDF documents into searchable knowledge and generates grounded answers with supporting evidence.
 
 Built with Python, FastAPI, hybrid retrieval, cross-encoder reranking, OpenAI, Docker, Prometheus, Grafana, and cAdvisor.
