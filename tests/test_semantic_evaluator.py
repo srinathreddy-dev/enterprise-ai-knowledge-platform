@@ -1,7 +1,5 @@
 
 import pytest
-import torch
-
 from types import SimpleNamespace
 
 from app.evaluation.semantic_evaluator import (
@@ -12,10 +10,7 @@ from app.evaluation.semantic_evaluator import (
 class FakeCrossEncoder:
     """Mock NLI model for isolated unit tests."""
 
-    def __init__(self, model_name, device):
-        self.model_name = model_name
-        self.device = device
-
+    def __init__(self):
         self.model = SimpleNamespace(
             config=SimpleNamespace(
                 id2label={
@@ -33,30 +28,21 @@ class FakeCrossEncoder:
         convert_to_tensor=False,
         show_progress_bar=False,
     ):
-        return torch.tensor(
-            [
-                [0.05, 0.90, 0.05]
-                for _ in pairs
-            ]
-        )
+        return [
+            [0.05, 0.90, 0.05]
+            for _ in pairs
+        ]
 
 
 @pytest.fixture
-def evaluator(monkeypatch):
-    monkeypatch.setattr(
-        "app.evaluation.semantic_evaluator.CrossEncoder",
-        FakeCrossEncoder,
-    )
-
+def evaluator():
     return SemanticFaithfulnessEvaluator(
-        model_name="test-model",
-        device="cpu",
+        model=FakeCrossEncoder()
     )
 
 
 def test_evaluator_initializes_with_mock_model(evaluator):
-    assert evaluator.model.model_name == "test-model"
-    assert evaluator.model.device == "cpu"
+    assert evaluator.model is not None
 
 
 def test_evaluator_identifies_entailment(evaluator):

@@ -1,26 +1,20 @@
-from dataclasses import dataclass
 
-from sentence_transformers import CrossEncoder
+import re
+from dataclasses import dataclass
 
 from app.retrieval.bm25_retriever import RetrievalResult
 
 
 @dataclass(frozen=True)
 class RerankedResult:
-    """A retrieved chunk with its cross-encoder relevance score."""
+    """A retrieved chunk with its relevance score."""
 
     result: RetrievalResult
     score: float
 
 
 class CrossEncoderReranker:
-    """Rerank retrieved chunks using a cross-encoder model."""
-
-    def __init__(
-        self,
-        model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2",
-    ) -> None:
-        self.model = CrossEncoder(model_name)
+    """Rerank retrieved chunks using lightweight lexical relevance."""
 
     def rerank(
         self,
@@ -28,7 +22,7 @@ class CrossEncoderReranker:
         results: list[RetrievalResult],
         top_k: int = 5,
     ) -> list[RerankedResult]:
-        """Rerank retrieval results for a query."""
+        """Rerank results without loading a machine-learning model."""
         if not query.strip():
             return []
 
@@ -38,23 +32,32 @@ class CrossEncoderReranker:
         if not results:
             return []
 
-        pairs = [
-            (query, result.chunk.text)
-            for result in results
-        ]
+        query_terms = set(re.findall(r"\b\w+\b", query.lower()))
 
-        scores = self.model.predict(pairs)
+        reranked_results = []
 
-        reranked_results = [
-            RerankedResult(
-                result=result,
-                score=float(score),
+        for result in results:
+            document_terms = set(
+                re.findall(r"\b\w+\b", result.chunk.text.lower())
             )
-            for result, score in zip(results, scores)
-        ]
+
+            overlap = len(query_terms & document_terms)
+            lexical_score = overlap / max(len(query_terms), 1)
+
+            combined_score = (
+                0.5 * lexical_score
+                + 0.5 * result.score
+            )
+
+            reranked_results.append(
+                RerankedResult(
+                    result=result,
+                    score=float(combined_score),
+                )
+            )
 
         reranked_results.sort(
-            key=lambda result: result.score,
+            key=lambda item: item.score,
             reverse=True,
         )
 

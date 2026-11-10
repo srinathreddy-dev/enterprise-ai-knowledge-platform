@@ -13,7 +13,6 @@ dependencies = [
     "openai==3.37.0",
     "pymupdf==1.28.2",
     "rank-bm25==0.2.2",
-    "sentence-transformers==6.1.0",
     "uvicorn[standard]==0.35.0",
     "prometheus-client==0.23.1",
 ]

@@ -1,27 +1,20 @@
 
+import re
 from dataclasses import dataclass
-
-from sentence_transformers import CrossEncoder
 
 from app.ingestion.chunker import TextChunk
 
 
 @dataclass(frozen=True)
 class RerankedResult:
-    """A chunk scored by a cross-encoder."""
+    """A chunk scored by lightweight lexical relevance."""
 
     chunk: TextChunk
     score: float
 
 
 class CrossEncoderReranker:
-    """Rerank retrieved chunks using query-document relevance."""
-
-    def __init__(
-        self,
-        model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2",
-    ) -> None:
-        self.model = CrossEncoder(model_name)
+    """Rerank chunks using lightweight lexical relevance."""
 
     def rerank(
         self,
@@ -29,8 +22,6 @@ class CrossEncoderReranker:
         chunks: list[TextChunk],
         top_k: int = 5,
     ) -> list[RerankedResult]:
-        """Return candidate chunks sorted by cross-encoder score."""
-
         if not query.strip():
             return []
 
@@ -40,20 +31,23 @@ class CrossEncoderReranker:
         if not chunks:
             return []
 
-        pairs = [
-            (query, chunk.text)
-            for chunk in chunks
-        ]
+        query_terms = set(re.findall(r"\b\w+\b", query.lower()))
+        results = []
 
-        scores = self.model.predict(pairs)
-
-        results = [
-            RerankedResult(
-                chunk=chunk,
-                score=float(score),
+        for chunk in chunks:
+            document_terms = set(
+                re.findall(r"\b\w+\b", chunk.text.lower())
             )
-            for chunk, score in zip(chunks, scores)
-        ]
+
+            overlap = len(query_terms & document_terms)
+            score = overlap / max(len(query_terms), 1)
+
+            results.append(
+                RerankedResult(
+                    chunk=chunk,
+                    score=float(score),
+                )
+            )
 
         results.sort(
             key=lambda result: result.score,

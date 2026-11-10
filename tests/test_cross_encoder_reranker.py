@@ -1,20 +1,13 @@
 
-import numpy as np
 import pytest
 
 from app.ingestion.chunker import TextChunk
-from app.retrieval.cross_encoder_reranker import (
-    CrossEncoderReranker,
-)
+from app.retrieval.bm25_retriever import RetrievalResult
+from app.reranking.cross_encoder_reranker import CrossEncoderReranker
 
 
-class MockCrossEncoder:
-    def predict(self, pairs):
-        return np.array([0.2, 0.9, 0.5])
-
-
-def create_chunks():
-    return [
+def create_results():
+    chunks = [
         TextChunk(
             text="Employees receive annual vacation benefits.",
             page_number=1,
@@ -24,46 +17,42 @@ def create_chunks():
         TextChunk(
             text="Employees enroll in health insurance during open enrollment.",
             page_number=2,
-            chunk_index=0,
+            chunk_index=1,
             document_id="employee_handbook",
         ),
         TextChunk(
             text="Employees can request remote work arrangements.",
             page_number=3,
-            chunk_index=0,
+            chunk_index=2,
             document_id="employee_handbook",
         ),
     ]
 
-
-def create_reranker():
-    reranker = CrossEncoderReranker.__new__(
-        CrossEncoderReranker
-    )
-    reranker.model = MockCrossEncoder()
-    return reranker
+    return [
+        RetrievalResult(chunk=chunk, score=score)
+        for chunk, score in zip(chunks, [0.2, 0.5, 0.3])
+    ]
 
 
-def test_reranker_sorts_chunks_by_relevance():
-    reranker = create_reranker()
+def test_reranker_sorts_results_by_relevance():
+    reranker = CrossEncoderReranker()
 
     results = reranker.rerank(
-        query="How do employees enroll in health insurance?",
-        chunks=create_chunks(),
+        query="employees health insurance enrollment",
+        results=create_results(),
         top_k=3,
     )
 
-    assert results[0].score == 0.9
-    assert results[1].score == 0.5
-    assert results[2].score == 0.2
+    assert len(results) == 3
+    assert results[0].result.chunk.page_number == 2
 
 
 def test_reranker_returns_requested_top_k():
-    reranker = create_reranker()
+    reranker = CrossEncoderReranker()
 
     results = reranker.rerank(
         query="employee benefits",
-        chunks=create_chunks(),
+        results=create_results(),
         top_k=2,
     )
 
@@ -71,48 +60,46 @@ def test_reranker_returns_requested_top_k():
 
 
 def test_reranker_returns_empty_for_empty_query():
-    reranker = create_reranker()
+    reranker = CrossEncoderReranker()
 
-    results = reranker.rerank(
+    assert reranker.rerank(
         query="   ",
-        chunks=create_chunks(),
-    )
-
-    assert results == []
+        results=create_results(),
+    ) == []
 
 
-def test_reranker_returns_empty_for_no_chunks():
-    reranker = create_reranker()
+def test_reranker_returns_empty_for_no_results():
+    reranker = CrossEncoderReranker()
 
-    results = reranker.rerank(
+    assert reranker.rerank(
         query="employee benefits",
-        chunks=[],
-    )
-
-    assert results == []
+        results=[],
+    ) == []
 
 
 def test_reranker_rejects_invalid_top_k():
-    reranker = create_reranker()
+    reranker = CrossEncoderReranker()
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="top_k"):
         reranker.rerank(
             query="employee benefits",
-            chunks=create_chunks(),
+            results=create_results(),
             top_k=0,
         )
 
 
-def test_reranker_results_contain_original_chunks():
-    reranker = create_reranker()
-    chunks = create_chunks()
+def test_reranker_preserves_original_chunks():
+    reranker = CrossEncoderReranker()
+    original = create_results()
 
     results = reranker.rerank(
         query="employee benefits",
-        chunks=chunks,
+        results=original,
         top_k=3,
     )
 
-    assert {result.chunk.chunk_id for result in results} == {
-        chunk.chunk_id for chunk in chunks
+    assert {
+        item.result.chunk.chunk_id for item in results
+    } == {
+        item.chunk.chunk_id for item in original
     }
