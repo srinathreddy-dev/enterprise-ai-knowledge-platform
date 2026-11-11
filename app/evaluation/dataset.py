@@ -13,12 +13,14 @@ EVALUATION_QUERIES = [
         query="What health insurance benefits are available to employees?",
         relevant_chunk_ids={
             "employee_benefits-page-1-chunk-0",
+            "employee_handbook-page-2-chunk-0",
         },
     ),
     EvaluationQuery(
         query="How many vacation days do employees receive each year?",
         relevant_chunk_ids={
             "leave_attendance_policy-page-1-chunk-0",
+            "employee_handbook-page-1-chunk-0",
         },
     ),
     EvaluationQuery(
@@ -32,6 +34,7 @@ EVALUATION_QUERIES = [
         query="When do employees become eligible for health insurance?",
         relevant_chunk_ids={
             "employee_benefits-page-1-chunk-0",
+            "employee_handbook-page-2-chunk-0",
         },
     ),
     EvaluationQuery(

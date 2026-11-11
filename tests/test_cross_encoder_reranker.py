@@ -103,3 +103,72 @@ def test_reranker_preserves_original_chunks():
     } == {
         item.chunk.chunk_id for item in original
     }
+
+def test_reranker_ignores_common_stopwords():
+    reranker = CrossEncoderReranker()
+
+    chunk = TextChunk(
+        text="The office is open on weekdays.",
+        page_number=1,
+        chunk_index=0,
+        document_id="office_policy",
+    )
+
+    results = [
+        RetrievalResult(chunk=chunk, score=0.0)
+    ]
+
+    reranked = reranker.rerank(
+        query="What is the maternity leave policy?",
+        results=results,
+        top_k=1,
+    )
+
+    assert reranked[0].score == pytest.approx(0.0)
+
+def test_tokenizer_removes_possessive_fragments():
+    reranker = CrossEncoderReranker()
+
+    tokens = reranker._tokenize(
+        "What are the company's attendance expectations?"
+    )
+
+    assert tokens == {"attendance", "expectations"}
+
+
+def test_reranker_matches_attendance_concepts():
+    reranker = CrossEncoderReranker()
+
+    attendance_chunk = TextChunk(
+        text=(
+            "Repeated tardiness may result in corrective action. "
+            "Employees should notify their manager if they expect "
+            "to arrive late."
+        ),
+        page_number=1,
+        chunk_index=0,
+        document_id="attendance_policy",
+    )
+
+    unrelated_chunk = TextChunk(
+        text=(
+            "Employees can enroll in the retirement savings plan "
+            "and receive employer contributions."
+        ),
+        page_number=1,
+        chunk_index=0,
+        document_id="retirement_policy",
+    )
+
+    results = [
+        RetrievalResult(chunk=unrelated_chunk, score=0.5),
+        RetrievalResult(chunk=attendance_chunk, score=0.5),
+    ]
+
+    ranked = reranker.rerank(
+        query="What are the company's attendance expectations?",
+        results=results,
+        top_k=2,
+    )
+
+    assert ranked[0].result.chunk.chunk_id == attendance_chunk.chunk_id

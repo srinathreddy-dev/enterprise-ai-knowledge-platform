@@ -88,3 +88,51 @@ def test_evaluator_accepts_custom_evaluation_queries():
     assert evaluation.recall_at_5 == 1.0
     assert evaluation.mean_reciprocal_rank == 1.0
 
+
+def test_evaluator_calculates_hybrid_with_reranking_metrics():
+    evaluator = RetrievalEvaluator(create_chunks())
+
+    evaluation = evaluator.evaluate_hybrid_with_reranking(
+        k=3,
+        candidate_k=3,
+    )
+
+    assert_valid_metrics(evaluation)
+
+
+def test_evaluator_hybrid_with_reranking_accepts_custom_queries():
+    queries = [
+        EvaluationQuery(
+            query="health insurance",
+            relevant_chunk_ids={
+                "employee_handbook-page-2-chunk-0"
+            },
+        )
+    ]
+
+    evaluator = RetrievalEvaluator(
+        create_chunks(),
+        evaluation_queries=queries,
+    )
+
+    evaluation = evaluator.evaluate_hybrid_with_reranking(
+        k=1,
+        candidate_k=3,
+    )
+
+    assert_valid_metrics(evaluation)
+
+
+def test_evaluator_hybrid_with_reranking_rejects_invalid_candidate_k():
+    evaluator = RetrievalEvaluator(create_chunks())
+
+    try:
+        evaluator.evaluate_hybrid_with_reranking(
+            k=5,
+            candidate_k=3,
+        )
+    except ValueError as error:
+        assert str(error) == "candidate_k must be at least k"
+    else:
+        raise AssertionError("Expected ValueError")
+
