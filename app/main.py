@@ -1,9 +1,12 @@
+
 import logging
 import secrets
 import time
 
+from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from pathlib import Path
+from threading import Lock
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import Response
@@ -35,6 +38,51 @@ logger = logging.getLogger(__name__)
 
 DOCUMENTS_DIRECTORY = Path("data/sample")
 
+
+# --------------------------------------------------
+# RATE LIMITING CONFIGURATION
+# --------------------------------------------------
+
+RATE_LIMIT_REQUESTS = 10
+RATE_LIMIT_WINDOW_SECONDS = 60
+
+_request_history = defaultdict(deque)
+_rate_limit_lock = Lock()
+
+
+def enforce_rate_limit(api_key: str) -> None:
+    """Limit each API key to 10 requests per 60-second window."""
+
+    current_time = time.monotonic()
+    window_start = current_time - RATE_LIMIT_WINDOW_SECONDS
+
+    with _rate_limit_lock:
+        request_times = _request_history[api_key]
+
+        while request_times and request_times[0] <= window_start:
+            request_times.popleft()
+
+        if len(request_times) >= RATE_LIMIT_REQUESTS:
+            retry_after = max(
+                1,
+                int(
+                    RATE_LIMIT_WINDOW_SECONDS
+                    - (current_time - request_times[0])
+                ) + 1,
+            )
+
+            raise HTTPException(
+                status_code=429,
+                detail="Rate limit exceeded. Please try again later.",
+                headers={"Retry-After": str(retry_after)},
+            )
+
+        request_times.append(current_time)
+
+
+# --------------------------------------------------
+# APPLICATION LIFECYCLE
+# --------------------------------------------------
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -71,12 +119,20 @@ async def lifespan(app: FastAPI):
     yield
 
 
+# --------------------------------------------------
+# FASTAPI APPLICATION
+# --------------------------------------------------
+
 app = FastAPI(
     title=settings.app_name,
     version="0.1.0",
     lifespan=lifespan,
 )
 
+
+# --------------------------------------------------
+# REQUEST LOGGING AND METRICS
+# --------------------------------------------------
 
 @app.middleware("http")
 async def request_logging_middleware(
@@ -145,6 +201,10 @@ async def request_logging_middleware(
         ).observe(duration_seconds)
 
 
+# --------------------------------------------------
+# REQUEST AND RESPONSE MODELS
+# --------------------------------------------------
+
 class AskRequest(BaseModel):
     """Request body for asking a question."""
 
@@ -172,11 +232,19 @@ class AskResponse(BaseModel):
     evidence: list[EvidenceResponse]
 
 
+# --------------------------------------------------
+# RAG SERVICE CONFIGURATION
+# --------------------------------------------------
+
 def set_rag_service(service: RAGService | None) -> None:
     """Configure the RAG service, including for tests."""
 
     app.state.rag_service = service
 
+
+# --------------------------------------------------
+# API KEY AUTHENTICATION
+# --------------------------------------------------
 
 def verify_api_key(api_key: str | None) -> None:
     """Verify the application API key."""
@@ -200,12 +268,20 @@ def verify_api_key(api_key: str | None) -> None:
         )
 
 
+# --------------------------------------------------
+# HEALTH CHECK
+# --------------------------------------------------
+
 @app.get("/health")
 def health_check() -> dict[str, str]:
     """Return the current health status of the API."""
 
     return {"status": "healthy"}
 
+
+# --------------------------------------------------
+# READINESS CHECK
+# --------------------------------------------------
 
 @app.get("/ready")
 def readiness_check() -> dict[str, str]:
@@ -222,6 +298,10 @@ def readiness_check() -> dict[str, str]:
     return {"status": "ready"}
 
 
+# --------------------------------------------------
+# PROMETHEUS METRICS
+# --------------------------------------------------
+
 @app.get("/metrics", include_in_schema=False)
 def metrics() -> Response:
     """Expose Prometheus application metrics."""
@@ -231,6 +311,10 @@ def metrics() -> Response:
         media_type=CONTENT_TYPE_LATEST,
     )
 
+
+# --------------------------------------------------
+# ASK ENDPOINT
+# --------------------------------------------------
 
 @app.post("/ask", response_model=AskResponse)
 def ask_question(
@@ -242,9 +326,13 @@ def ask_question(
 ) -> AskResponse:
     """Answer a question using retrieved document evidence."""
 
-    # Authenticate before accessing the RAG service.
+    # Step 1: Authenticate the client.
     verify_api_key(api_key)
 
+    # Step 2: Enforce API rate limits.
+    enforce_rate_limit(api_key)
+
+    # Step 3: Check RAG service availability.
     service = getattr(app.state, "rag_service", None)
 
     if service is None:
@@ -253,6 +341,7 @@ def ask_question(
             detail="The knowledge service is not configured.",
         )
 
+    # Step 4: Generate a grounded answer.
     try:
         result = service.ask(request.question)
 
@@ -316,6 +405,7 @@ def ask_question(
             ),
         ) from exc
 
+    # Step 5: Return answer and supporting evidence.
     return AskResponse(
         question=result.question,
         answer=result.answer,

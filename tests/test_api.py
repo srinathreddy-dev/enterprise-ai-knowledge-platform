@@ -429,3 +429,57 @@ def test_ask_endpoint_handles_openai_authentication_error():
 
     finally:
         set_rag_service(None)
+
+
+def test_rate_limit_allows_first_10_requests():
+    from app.main import (
+        _request_history,
+        enforce_rate_limit,
+    )
+
+    api_key = "rate-limit-test-key"
+    _request_history.pop(api_key, None)
+
+    for _ in range(10):
+        enforce_rate_limit(api_key)
+
+
+def test_rate_limit_rejects_11th_request():
+    import pytest
+    from fastapi import HTTPException
+
+    from app.main import (
+        _request_history,
+        enforce_rate_limit,
+    )
+
+    api_key = "rate-limit-reject-test-key"
+    _request_history.pop(api_key, None)
+
+    for _ in range(10):
+        enforce_rate_limit(api_key)
+
+    with pytest.raises(HTTPException) as exc_info:
+        enforce_rate_limit(api_key)
+
+    assert exc_info.value.status_code == 429
+    assert "Retry-After" in exc_info.value.headers
+
+
+def test_rate_limit_tracks_different_api_keys_separately():
+    from app.main import (
+        _request_history,
+        enforce_rate_limit,
+    )
+
+    key_one = "rate-limit-user-one"
+    key_two = "rate-limit-user-two"
+
+    _request_history.pop(key_one, None)
+    _request_history.pop(key_two, None)
+
+    for _ in range(10):
+        enforce_rate_limit(key_one)
+
+    # A different API key should have its own allowance.
+    enforce_rate_limit(key_two)
