@@ -1,6 +1,8 @@
 import numpy as np
 import pytest
 
+from types import SimpleNamespace
+
 
 class TestSemanticEmbedder:
     """Deterministic local embedder for tests; never calls OpenAI."""
@@ -34,7 +36,10 @@ class TestSemanticEmbedder:
         )
 
         if np.linalg.norm(vector) == 0:
-            vector = np.array([0.0, 0.0, 1.0], dtype=np.float32)
+            vector = np.array(
+                [0.0, 0.0, 1.0],
+                dtype=np.float32,
+            )
 
         return vector / np.linalg.norm(vector)
 
@@ -55,4 +60,9 @@ def use_test_embedder(monkeypatch):
     monkeypatch.setattr(
         "app.retrieval.semantic_search.SemanticEmbedder",
         TestSemanticEmbedder,
+    )
+
+    monkeypatch.setattr(
+        "app.main.settings",
+        SimpleNamespace(app_api_key="test-api-key"),
     )

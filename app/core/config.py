@@ -10,11 +10,16 @@ class Settings:
         "APP_NAME",
         "Enterprise AI Knowledge Platform",
     )
+
     environment: str = os.getenv(
         "ENVIRONMENT",
         "development",
     )
+
     openai_api_key: str | None = os.getenv("OPENAI_API_KEY")
+
+    app_api_key: str | None = os.getenv("APP_API_KEY")
+
     openai_model: str = os.getenv(
         "OPENAI_MODEL",
         "gpt-4.1-mini",

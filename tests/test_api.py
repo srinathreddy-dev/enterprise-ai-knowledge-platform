@@ -1,7 +1,8 @@
-
 from unittest.mock import Mock
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
+
 from openai import (
     APIConnectionError,
     APITimeoutError,
@@ -18,18 +19,24 @@ from app.reranking.cross_encoder_reranker import RerankedResult
 from app.retrieval.bm25_retriever import RetrievalResult
 
 
-client = TestClient(app)
+client = TestClient(
+    app,
+    headers={"X-API-Key": "test-api-key"},
+)
 
 
 def create_mock_openai_response(status_code: int):
     """Create a mock HTTP response for OpenAI API exceptions."""
+
     response = Mock()
     response.status_code = status_code
     response.headers = {}
     response.request = Mock()
+
     response.json.return_value = {
         "error": {"message": "Mock OpenAI API error"}
     }
+
     return response
 
 
@@ -38,6 +45,47 @@ def test_health_endpoint():
 
     assert response.status_code == 200
     assert response.json() == {"status": "healthy"}
+
+
+def test_ask_endpoint_rejects_missing_api_key():
+    unauthenticated_client = TestClient(app)
+
+    response = unauthenticated_client.post(
+        "/ask",
+        json={"question": "What is the vacation policy?"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid or missing API key."
+
+def test_ask_endpoint_rejects_invalid_api_key():
+    response = client.post(
+        "/ask",
+        json={"question": "What is the vacation policy?"},
+        headers={"X-API-Key": "incorrect-api-key"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid or missing API key."
+
+
+def test_ask_endpoint_returns_503_when_api_key_not_configured(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        "app.main.settings",
+        SimpleNamespace(app_api_key=None),
+    )
+
+    response = client.post(
+        "/ask",
+        json={"question": "What is the vacation policy?"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == (
+        "API authentication is not configured."
+    )
 
 
 def test_ask_endpoint_returns_answer_and_evidence():
@@ -83,15 +131,18 @@ def test_ask_endpoint_returns_answer_and_evidence():
         assert data["question"] == (
             "How many vacation days do employees receive?"
         )
+
         assert data["answer"] == (
             "Employees receive 15 days of paid vacation per year. "
             "[Page 1]"
         )
+
         assert len(data["evidence"]) == 1
 
         assert data["evidence"][0]["chunk_id"] == (
             "employee_handbook-page-1-chunk-0"
         )
+
         assert data["evidence"][0]["document_name"] == (
             "employee_handbook.pdf"
         )
@@ -177,6 +228,7 @@ def test_ask_endpoint_with_real_pdf_and_fake_answer_service():
         assert data["evidence"][0]["chunk_id"] == (
             "employee_handbook-page-1-chunk-0"
         )
+
         assert data["evidence"][0]["document_name"] == (
             "employee_handbook.pdf"
         )
@@ -216,6 +268,7 @@ def test_ask_endpoint_searches_multiple_pdfs():
         assert data["answer"] == (
             "Multi-factor authentication is required. [Page 1]"
         )
+
         assert data["evidence"]
 
         document_names = {
@@ -257,6 +310,7 @@ def test_ready_endpoint_returns_503_when_service_is_not_configured():
     response = client.get("/ready")
 
     assert response.status_code == 503
+
     assert response.json() == {
         "detail": "The knowledge service is not configured."
     }
@@ -272,6 +326,7 @@ def test_ask_endpoint_handles_openai_rate_limit():
     )
 
     mock_service.ask.side_effect = error
+
     set_rag_service(mock_service)
 
     try:
@@ -283,6 +338,7 @@ def test_ask_endpoint_handles_openai_rate_limit():
         )
 
         assert response.status_code == 503
+
         assert response.json()["detail"] == (
             "The AI service is temporarily unavailable. "
             "Please try again later."
@@ -297,6 +353,7 @@ def test_ask_endpoint_handles_openai_timeout():
 
     error = APITimeoutError(request=Mock())
     mock_service.ask.side_effect = error
+
     set_rag_service(mock_service)
 
     try:
@@ -308,6 +365,7 @@ def test_ask_endpoint_handles_openai_timeout():
         )
 
         assert response.status_code == 504
+
         assert response.json()["detail"] == (
             "The AI service request timed out. Please try again."
         )
@@ -321,6 +379,7 @@ def test_ask_endpoint_handles_openai_connection_error():
 
     error = APIConnectionError(request=Mock())
     mock_service.ask.side_effect = error
+
     set_rag_service(mock_service)
 
     try:
@@ -332,6 +391,7 @@ def test_ask_endpoint_handles_openai_connection_error():
         )
 
         assert response.status_code == 503
+
         assert response.json()["detail"] == (
             "The AI service is temporarily unreachable."
         )
@@ -350,6 +410,7 @@ def test_ask_endpoint_handles_openai_authentication_error():
     )
 
     mock_service.ask.side_effect = error
+
     set_rag_service(mock_service)
 
     try:
@@ -361,10 +422,10 @@ def test_ask_endpoint_handles_openai_authentication_error():
         )
 
         assert response.status_code == 502
+
         assert response.json()["detail"] == (
             "The AI service authentication is not configured correctly."
         )
 
     finally:
         set_rag_service(None)
-
