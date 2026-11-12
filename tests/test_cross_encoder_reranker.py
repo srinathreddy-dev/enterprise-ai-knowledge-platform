@@ -172,3 +172,98 @@ def test_reranker_matches_attendance_concepts():
     )
 
     assert ranked[0].result.chunk.chunk_id == attendance_chunk.chunk_id
+
+def test_vacation_query_does_not_boost_leave_of_absence():
+
+    reranker = CrossEncoderReranker()
+
+    vacation_chunk = TextChunk(
+        text=(
+            "Full-time employees receive 15 days of paid vacation "
+            "per calendar year."
+        ),
+        page_number=1,
+        chunk_index=0,
+        document_id="employee_handbook",
+    )
+
+    pto_chunk = TextChunk(
+        text=(
+            "Eligible full-time employees receive 15 days of paid "
+            "time off (PTO) annually. PTO may be used for vacation."
+        ),
+        page_number=1,
+        chunk_index=1,
+        document_id="leave_attendance_policy",
+    )
+
+    absence_chunk = TextChunk(
+        text=(
+            "Repeated unexcused absences or tardiness may result "
+            "in corrective action. Employees should notify their "
+            "manager if they expect to arrive late. Employees "
+            "requiring an extended leave of absence should contact HR."
+        ),
+        page_number=1,
+        chunk_index=2,
+        document_id="leave_attendance_policy",
+    )
+
+    results = [
+        RetrievalResult(chunk=vacation_chunk, score=0.5),
+        RetrievalResult(chunk=pto_chunk, score=0.5),
+        RetrievalResult(chunk=absence_chunk, score=0.5),
+    ]
+
+    ranked = reranker.rerank(
+        query="How many vacation days do employees receive?",
+        results=results,
+        top_k=3,
+    )
+
+    scores = {
+        item.result.chunk.chunk_id: item.score
+        for item in ranked
+    }
+
+    assert scores[vacation_chunk.chunk_id] > scores[absence_chunk.chunk_id]
+
+    assert scores[pto_chunk.chunk_id] > scores[absence_chunk.chunk_id]
+
+def test_reranker_matches_sick_leave_concepts():
+
+    reranker = CrossEncoderReranker()
+
+    sick_leave_chunk = TextChunk(
+        text=(
+            "Employees who are ill should notify their manager. "
+            "Sick leave may be used when employees are unable to work "
+            "because of illness."
+        ),
+        page_number=1,
+        chunk_index=0,
+        document_id="leave_attendance_policy",
+    )
+
+    vacation_chunk = TextChunk(
+        text=(
+            "Full-time employees receive 15 days of paid vacation "
+            "per calendar year."
+        ),
+        page_number=1,
+        chunk_index=1,
+        document_id="employee_handbook",
+    )
+
+    results = [
+        RetrievalResult(chunk=vacation_chunk, score=0.5),
+        RetrievalResult(chunk=sick_leave_chunk, score=0.5),
+    ]
+
+    ranked = reranker.rerank(
+        query="What is the sick leave policy?",
+        results=results,
+        top_k=2,
+    )
+
+    assert ranked[0].result.chunk.chunk_id == sick_leave_chunk.chunk_id

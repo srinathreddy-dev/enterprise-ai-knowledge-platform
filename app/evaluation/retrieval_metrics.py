@@ -67,3 +67,25 @@ def mean_reciprocal_rank(
     ]
 
     return sum(reciprocal_ranks) / len(reciprocal_ranks)
+
+def precision_at_k(
+    retrieved_chunk_ids: list[str],
+    relevant_chunk_ids: set[str],
+    k: int,
+) -> float:
+    """Calculate precision among the top-k retrieved chunks."""
+
+    if k <= 0:
+        raise ValueError("k must be greater than zero")
+
+    retrieved = retrieved_chunk_ids[:k]
+
+    if not retrieved:
+        return 0.0
+
+    relevant_retrieved = sum(
+        chunk_id in relevant_chunk_ids
+        for chunk_id in retrieved
+    )
+
+    return relevant_retrieved / len(retrieved)

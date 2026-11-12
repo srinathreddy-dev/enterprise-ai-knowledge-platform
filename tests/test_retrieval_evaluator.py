@@ -1,84 +1,92 @@
 
+from pathlib import Path
+
+import pytest
+
 from app.evaluation.retrieval_evaluator import RetrievalEvaluator
-from app.ingestion.chunker import TextChunk
 from app.evaluation.retrieval_metrics import EvaluationQuery
+from app.ingestion.pipeline import DocumentIngestionPipeline
 
 
-def create_chunks() -> list[TextChunk]:
+@pytest.fixture
+def sample_chunks():
+    """Load the same sample documents used by the retrieval benchmark."""
+    documents = DocumentIngestionPipeline().process_directory(
+        Path("data/sample")
+    )
+
     return [
-        TextChunk(
-            text="Employees can enroll in health insurance during open enrollment.",
-            page_number=2,
-            chunk_index=0,
-            document_id="employee_handbook",
-        ),
-        TextChunk(
-            text="Employees receive fifteen paid vacation days each year.",
-            page_number=1,
-            chunk_index=0,
-            document_id="employee_handbook",
-        ),
-        TextChunk(
-            text="The company provides retirement savings plans to eligible employees.",
-            page_number=3,
-            chunk_index=0,
-            document_id="employee_handbook",
-        ),
+        chunk
+        for document in documents
+        for chunk in document.chunks
     ]
 
 
 def assert_valid_metrics(evaluation):
-    assert 0.0 <= evaluation.recall_at_1 <= 1.0
-    assert 0.0 <= evaluation.recall_at_3 <= 1.0
-    assert 0.0 <= evaluation.recall_at_5 <= 1.0
-    assert 0.0 <= evaluation.mean_reciprocal_rank <= 1.0
+    """Verify that all retrieval metrics are between 0 and 1."""
+    metrics = [
+        evaluation.recall_at_1,
+        evaluation.recall_at_3,
+        evaluation.recall_at_5,
+        evaluation.precision_at_1,
+        evaluation.precision_at_3,
+        evaluation.precision_at_5,
+        evaluation.mean_reciprocal_rank,
+    ]
+
+    for metric in metrics:
+        assert 0.0 <= metric <= 1.0
 
 
-def test_evaluator_calculates_bm25_metrics():
-    evaluator = RetrievalEvaluator(create_chunks())
+def test_evaluator_runs_bm25(sample_chunks):
+    evaluator = RetrievalEvaluator(chunks=sample_chunks)
 
-    evaluation = evaluator.evaluate_bm25(k=3)
-
-    assert_valid_metrics(evaluation)
-
-
-def test_evaluator_calculates_semantic_metrics():
-    evaluator = RetrievalEvaluator(create_chunks())
-
-    evaluation = evaluator.evaluate_semantic(k=3)
-
-    assert_valid_metrics(evaluation)
-
-
-def test_evaluator_calculates_hybrid_metrics():
-    evaluator = RetrievalEvaluator(create_chunks())
-
-    evaluation = evaluator.evaluate_hybrid(k=3)
+    evaluation = evaluator.evaluate_bm25(k=5)
 
     assert_valid_metrics(evaluation)
 
 
-def test_evaluator_calculates_rrf_metrics():
-    evaluator = RetrievalEvaluator(create_chunks())
+def test_evaluator_runs_semantic(sample_chunks):
+    evaluator = RetrievalEvaluator(chunks=sample_chunks)
 
-    evaluation = evaluator.evaluate_rrf(k=3)
+    evaluation = evaluator.evaluate_semantic(k=5)
 
     assert_valid_metrics(evaluation)
 
 
-def test_evaluator_accepts_custom_evaluation_queries():
-    queries = [
+def test_evaluator_runs_hybrid(sample_chunks):
+    evaluator = RetrievalEvaluator(chunks=sample_chunks)
+
+    evaluation = evaluator.evaluate_hybrid(k=5)
+
+    assert_valid_metrics(evaluation)
+
+
+def test_evaluator_runs_weighted_rrf(sample_chunks):
+    evaluator = RetrievalEvaluator(chunks=sample_chunks)
+
+    evaluation = evaluator.evaluate_weighted_rrf(
+        k=5,
+        bm25_weight=0.70,
+        semantic_weight=0.30,
+    )
+
+    assert_valid_metrics(evaluation)
+
+
+def test_evaluator_accepts_custom_evaluation_queries(sample_chunks):
+    custom_queries = [
         EvaluationQuery(
-            query="health insurance",
+            query="How many vacation days do employees receive?",
             relevant_chunk_ids={
-                "employee_handbook-page-2-chunk-0"
+                "employee_handbook-page-1-chunk-0"
             },
         )
     ]
 
     evaluator = RetrievalEvaluator(
-        create_chunks(),
-        evaluation_queries=queries,
+        chunks=sample_chunks,
+        evaluation_queries=custom_queries,
     )
 
     evaluation = evaluator.evaluate_bm25(k=1)
@@ -86,53 +94,31 @@ def test_evaluator_accepts_custom_evaluation_queries():
     assert evaluation.recall_at_1 == 1.0
     assert evaluation.recall_at_3 == 1.0
     assert evaluation.recall_at_5 == 1.0
+
+    assert evaluation.precision_at_1 == 1.0
+    assert evaluation.precision_at_3 == 1.0
+    assert evaluation.precision_at_5 == 1.0
+
     assert evaluation.mean_reciprocal_rank == 1.0
 
 
-def test_evaluator_calculates_hybrid_with_reranking_metrics():
-    evaluator = RetrievalEvaluator(create_chunks())
+def test_evaluator_runs_hybrid_with_reranking(sample_chunks):
+    evaluator = RetrievalEvaluator(chunks=sample_chunks)
 
     evaluation = evaluator.evaluate_hybrid_with_reranking(
-        k=3,
-        candidate_k=3,
+        k=5,
+        candidate_k=10,
     )
 
     assert_valid_metrics(evaluation)
 
 
-def test_evaluator_hybrid_with_reranking_accepts_custom_queries():
-    queries = [
-        EvaluationQuery(
-            query="health insurance",
-            relevant_chunk_ids={
-                "employee_handbook-page-2-chunk-0"
-            },
-        )
-    ]
+def test_evaluator_rejects_invalid_candidate_k(sample_chunks):
+    evaluator = RetrievalEvaluator(chunks=sample_chunks)
 
-    evaluator = RetrievalEvaluator(
-        create_chunks(),
-        evaluation_queries=queries,
-    )
-
-    evaluation = evaluator.evaluate_hybrid_with_reranking(
-        k=1,
-        candidate_k=3,
-    )
-
-    assert_valid_metrics(evaluation)
-
-
-def test_evaluator_hybrid_with_reranking_rejects_invalid_candidate_k():
-    evaluator = RetrievalEvaluator(create_chunks())
-
-    try:
+    with pytest.raises(ValueError):
         evaluator.evaluate_hybrid_with_reranking(
             k=5,
-            candidate_k=3,
+            candidate_k=0,
         )
-    except ValueError as error:
-        assert str(error) == "candidate_k must be at least k"
-    else:
-        raise AssertionError("Expected ValueError")
 

@@ -5,6 +5,7 @@ from app.evaluation.dataset import EVALUATION_QUERIES
 from app.evaluation.retrieval_metrics import (
     EvaluationQuery,
     mean_reciprocal_rank,
+    precision_at_k,
     recall_at_k,
 )
 from app.ingestion.chunker import TextChunk
@@ -25,6 +26,12 @@ class RetrievalEvaluation:
     recall_at_1: float
     recall_at_3: float
     recall_at_5: float
+
+    precision_at_1: float
+    precision_at_3: float
+    precision_at_5: float
+
+
     mean_reciprocal_rank: float
 
 
@@ -467,11 +474,15 @@ class RetrievalEvaluator:
         self,
         retrieved_results: list[list[str]],
     ) -> RetrievalEvaluation:
+
         if not self.evaluation_queries:
             return RetrievalEvaluation(
                 recall_at_1=0.0,
                 recall_at_3=0.0,
                 recall_at_5=0.0,
+                precision_at_1=0.0,
+                precision_at_3=0.0,
+                precision_at_5=0.0,
                 mean_reciprocal_rank=0.0,
             )
 
@@ -495,10 +506,28 @@ class RetrievalEvaluator:
 
             return sum(scores) / len(scores)
 
+        def calculate_average_precision(cutoff: int) -> float:
+            scores = [
+                precision_at_k(
+                    retrieved_chunk_ids,
+                    query.relevant_chunk_ids,
+                    cutoff,
+                )
+                for query, retrieved_chunk_ids in zip(
+                    self.evaluation_queries,
+                    retrieved_results,
+                )
+            ]
+
+            return sum(scores) / len(scores)
+
         return RetrievalEvaluation(
             recall_at_1=calculate_average_recall(1),
             recall_at_3=calculate_average_recall(3),
             recall_at_5=calculate_average_recall(5),
+            precision_at_1=calculate_average_precision(1),
+            precision_at_3=calculate_average_precision(3),
+            precision_at_5=calculate_average_precision(5),
             mean_reciprocal_rank=mean_reciprocal_rank(
                 self.evaluation_queries,
                 retrieved_results,

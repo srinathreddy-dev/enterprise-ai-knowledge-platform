@@ -8,15 +8,17 @@ from app.ingestion.pipeline import DocumentIngestionPipeline
 
 
 DATA_DIRECTORY = Path("data/sample")
+
 TOP_K = 5
+
 CANDIDATE_K = 10
 
 
 def main() -> None:
-    print("=" * 76)
+    print("=" * 100)
     print("ENTERPRISE AI KNOWLEDGE PLATFORM")
     print("OFFLINE RETRIEVAL BENCHMARK")
-    print("=" * 76)
+    print("=" * 100)
 
     print("\nLoading evaluation documents...")
 
@@ -90,19 +92,22 @@ def main() -> None:
         ),
     ]
 
-    print("\n" + "=" * 76)
+    print("\n" + "=" * 100)
     print("RETRIEVAL QUALITY RESULTS")
-    print("=" * 76)
+    print("=" * 100)
 
     print(
         f"{'Strategy':<30}"
         f"{'Recall@1':>10}"
         f"{'Recall@3':>10}"
         f"{'Recall@5':>10}"
+        f"{'Precision@1':>13}"
+        f"{'Precision@3':>13}"
+        f"{'Precision@5':>13}"
         f"{'MRR':>10}"
     )
 
-    print("-" * 70)
+    print("-" * 112)
 
     for name, metrics in benchmark_results:
         print(
@@ -110,18 +115,23 @@ def main() -> None:
             f"{metrics.recall_at_1:>10.3f}"
             f"{metrics.recall_at_3:>10.3f}"
             f"{metrics.recall_at_5:>10.3f}"
+            f"{metrics.precision_at_1:>13.3f}"
+            f"{metrics.precision_at_3:>13.3f}"
+            f"{metrics.precision_at_5:>13.3f}"
             f"{metrics.mean_reciprocal_rank:>10.3f}"
         )
 
-    print("-" * 70)
+    print("-" * 112)
 
     print(
         "\nIMPORTANT: These are offline diagnostic results using "
         "feature hashing."
     )
+
     print(
         "They do not measure the quality of OpenAI production embeddings."
     )
+
     print(
         "The reranker is a lexical heuristic, not a trained cross-encoder."
     )

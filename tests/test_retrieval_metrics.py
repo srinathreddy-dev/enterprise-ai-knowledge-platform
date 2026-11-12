@@ -3,6 +3,7 @@ import pytest
 from app.evaluation.retrieval_metrics import (
     EvaluationQuery,
     mean_reciprocal_rank,
+    precision_at_k,
     reciprocal_rank,
     recall_at_k,
 )
@@ -141,5 +142,66 @@ def test_recall_at_k_rejects_invalid_k():
         recall_at_k(
             retrieved_chunk_ids=["page-1-chunk-0"],
             relevant_chunk_ids={"page-1-chunk-0"},
+            k=0,
+        )
+
+def test_precision_at_k_calculates_correct_score():
+    score = precision_at_k(
+        retrieved_chunk_ids=[
+            "chunk-1",
+            "chunk-2",
+            "chunk-3",
+            "chunk-4",
+        ],
+        relevant_chunk_ids={"chunk-1", "chunk-3"},
+        k=3,
+    )
+
+    assert score == pytest.approx(2 / 3)
+
+
+def test_precision_at_k_returns_one_when_all_results_are_relevant():
+    score = precision_at_k(
+        retrieved_chunk_ids=["chunk-1", "chunk-2"],
+        relevant_chunk_ids={"chunk-1", "chunk-2"},
+        k=2,
+    )
+
+    assert score == 1.0
+
+
+def test_precision_at_k_returns_zero_when_no_results_are_relevant():
+    score = precision_at_k(
+        retrieved_chunk_ids=["chunk-1", "chunk-2"],
+        relevant_chunk_ids={"chunk-3"},
+        k=2,
+    )
+
+    assert score == 0.0
+
+
+def test_precision_at_k_returns_zero_for_empty_results():
+    assert precision_at_k(
+        retrieved_chunk_ids=[],
+        relevant_chunk_ids={"chunk-1"},
+        k=5,
+    ) == 0.0
+
+
+def test_precision_at_k_uses_actual_result_count():
+    score = precision_at_k(
+        retrieved_chunk_ids=["chunk-1", "chunk-2"],
+        relevant_chunk_ids={"chunk-1"},
+        k=5,
+    )
+
+    assert score == 0.5
+
+
+def test_precision_at_k_rejects_invalid_k():
+    with pytest.raises(ValueError, match="k"):
+        precision_at_k(
+            retrieved_chunk_ids=["chunk-1"],
+            relevant_chunk_ids={"chunk-1"},
             k=0,
         )

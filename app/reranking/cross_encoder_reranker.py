@@ -43,7 +43,6 @@ CONCEPTS = {
     "vacation": {
         "vacation",
         "pto",
-        "leave",
         "holiday",
         "timeoff",
     },
